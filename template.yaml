@@ -1,27 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Transform: AWS::Serverless-2016-10-31
 Resources:
-  ChangelogApi:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name: !Sub
-        - ${ResourceName} From Stack ${StackTagName} Environment ${EnvironmentTagName}
-        - ResourceName: Changelog API
-      StageName: !Ref EnvironmentAPIGatewayStageName
-      DefinitionBody:
-        swagger: '2.0'
-        info: {}
-        paths:
-          /:
-            get:
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getChangelog.Arn}/invocations
-              responses: {}
-      EndpointConfiguration: REGIONAL
-    Metadata:
-      StackeryName: Changelog API
   getChangelog:
     Type: AWS::Serverless::Function
     Properties:
@@ -47,17 +26,17 @@ Resources:
               Resource:
                 - !Sub arn:${AWS::Partition}:s3:::${HtmlBucket}
                 - !Sub arn:${AWS::Partition}:s3:::${HtmlBucket}/*
-      Events:
-        ApiGET:
-          Type: Api
-          Properties:
-            Path: /
-            Method: GET
-            RestApiId: !Ref ChangelogApi
       Environment:
         Variables:
           BUCKET_NAME: !Ref HtmlBucket
           BUCKET_ARN: !GetAtt HtmlBucket.Arn
+      Events:
+        Timer:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 day)
+          Metadata:
+            StackeryName: dailyScraperTrigger
     Metadata:
       StackeryName: getChangelog
   HtmlBucket:
@@ -73,6 +52,3 @@ Parameters:
   EnvironmentTagName:
     Type: String
     Description: Environment Name (injected by Stackery at deployment time)
-  EnvironmentAPIGatewayStageName:
-    Type: String
-    Description: Environment name used for API Gateway Stage names (injected by Stackery at deployment time)
