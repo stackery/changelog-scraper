@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  ChangelogApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${StackTagName} Environment ${EnvironmentTagName}
+        - ResourceName: Changelog API
+      StageName: !Ref EnvironmentAPIGatewayStageName
+      DefinitionBody:
+        swagger: '2.0'
+        info: {}
+        paths:
+          /:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getChangelog.Arn}/invocations
+              responses: {}
+      EndpointConfiguration: REGIONAL
+    Metadata:
+      StackeryName: Changelog API
+  getChangelog:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-getChangelog
+      Description: !Sub
+        - Stack ${StackTagName} Environment ${EnvironmentTagName} Function ${ResourceName}
+        - ResourceName: getChangelog
+      CodeUri: src/getChangelog
+      Handler: index.handler
+      Runtime: nodejs8.10
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Policies:
+        - AWSXrayWriteOnlyAccess
+        - S3CrudPolicy:
+            BucketName: !Ref HtmlBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObjectAcl
+                - s3:PutObjectAcl
+              Resource:
+                - !Sub arn:${AWS::Partition}:s3:::${HtmlBucket}
+                - !Sub arn:${AWS::Partition}:s3:::${HtmlBucket}/*
+      Events:
+        ApiGET:
+          Type: Api
+          Properties:
+            Path: /
+            Method: GET
+            RestApiId: !Ref ChangelogApi
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref HtmlBucket
+          BUCKET_ARN: !GetAtt HtmlBucket.Arn
+    Metadata:
+      StackeryName: getChangelog
+  HtmlBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-htmlbucket
+    Metadata:
+      StackeryName: HtmlBucket
+Parameters:
+  StackTagName:
+    Type: String
+    Description: Stack Name (injected by Stackery at deployment time)
+  EnvironmentTagName:
+    Type: String
+    Description: Environment Name (injected by Stackery at deployment time)
+  EnvironmentAPIGatewayStageName:
+    Type: String
+    Description: Environment name used for API Gateway Stage names (injected by Stackery at deployment time)
